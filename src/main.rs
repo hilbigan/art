@@ -1,6 +1,7 @@
 use rand::prelude::*;
 use image::{RgbImage, Rgb};
 use std::time::Instant;
+use std::collections::BTreeSet;
 
 fn main() {
     let width = 200;
@@ -40,12 +41,13 @@ struct Color {
 
 impl Color {
     fn dist(&self, other: &Color) -> usize {
-        usize::pow(self.r - other.r, 2) + usize::pow(self.g - other.g, 2) + usize::pow(self.b - other.b, 2)
+        (isize::pow((self.r as isize - other.r as isize), 2) + isize::pow((self.g as isize - other.g as isize), 2) + isize::pow((self.b as isize - other.b as isize), 2)) as usize
     }
 }
 
 fn generate_image(width: usize, height: usize, input: &Vec<Vec<Color>>) -> Vec<Vec<Color>> {
-    let mut pixels = vec![vec![(Color { r: 0, g: 0, b: 0 }, false); width]; height];
+    let mut pixels = vec![vec![Color { r: 0, g: 0, b: 0 }; width]; height];
+    let mut assigned = vec![vec![false; width]; height];
     let mut spots = vec![Point { x: width/2, y: height/2 }];
     let mut x = 0;
     let mut y = 0;
@@ -96,18 +98,19 @@ fn generate_image(width: usize, height: usize, input: &Vec<Vec<Color>>) -> Vec<V
         let best_spot_index = spots.iter().enumerate().min_by_key(|(i, spot)| {
             let mut total_distance = 0;
             neighbors!(spot, {
-                total_distance += pixels[y][x].0.dist(&color);
+                total_distance += pixels[y][x].dist(&color);
             });
             total_distance
         }).unwrap().0;
         let best_spot = spots.remove(best_spot_index);
-        pixels[best_spot.y][best_spot.x] = (color, true);
+        pixels[best_spot.y][best_spot.x] = color;
+        assigned[best_spot.y][best_spot.x] = true;
         neighbors!(best_spot, {
-            if !pixels[y][x].1 && !spots.iter().any(|spot| spot.x == x && spot.y == y) {
+            if !assigned[y][x] && !spots.iter().any(|spot| spot.x == x && spot.y == y) {
                 spots.push(Point { x, y });
             }
         });
     }
 
-    return pixels.iter().map(|vec| vec.iter().map(|(color, _)| *color).collect()).collect();
+    return pixels;
 }
