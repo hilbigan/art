@@ -3,19 +3,26 @@ use image::{RgbImage, Rgb};
 use std::time::Instant;
 use std::collections::BTreeSet;
 use image::io::Reader as ImageReader;
+use rayon::prelude::*;
+use std::env;
+use itertools::Itertools;
 
 fn main() {
-    let width = 64;
-    let height = 64;
+    let args = env::args().collect_vec();
+    let width: usize = args[1].parse().expect("arg 1: usize width");
+    let height: usize = args[2].parse().expect("arg 2: usize height");
+    let input_path = args[3].clone();
+    println!("{}x{} palette: {}", width, height, input_path);
+    
     let mut rng = rand::thread_rng();
     let mut input = vec![vec![Color { r: 0, g: 0, b: 0 }; width]; height];
-    let input_image = ImageReader::open("./monet.jpg").unwrap().decode().unwrap();
+    let input_image = ImageReader::open(input_path).unwrap().decode().unwrap();
     let image_offset_x = rng.gen_range(0 .. (input_image.width() as usize - width));
     let image_offset_y = rng.gen_range(0 .. (input_image.height() as usize - height));
     let input_image_rgb = input_image.as_rgb8().unwrap();
     for x in image_offset_x .. image_offset_x + width {
         for y in image_offset_y .. image_offset_y + height {
-            let rgb = input_image_rgb.get_pixel(x as u32, y as u32).0;
+            let rgb = input_image_rgb.get_pixel(x as u32 % input_image.width(), y as u32 % input_image.height()).0;
             input[y - image_offset_y][x - image_offset_x] = Color { r: rgb[0] as usize, g: rgb[1] as usize, b: rgb[2] as usize };
         }
     }
@@ -73,11 +80,11 @@ fn generate_image(width: usize, height: usize, input: &Vec<Vec<Color>>, starting
     let mut pixels = vec![vec![Color { r: 0, g: 0, b: 0 }; width]; height];
     let mut cell_state = vec![vec![CellState::Empty; width]; height];
     let mut spots = starting_spots; //vec![Point { x: width/2, y: height/2 }];
-    let mut x = 0;
-    let mut y = 0;
+    let mut x;
+    let mut y;
 
     macro_rules! neighbors {
-        ( $spot:expr, $fn:block ) => {
+        ( $spot:expr, $x:expr, $y:expr, $fn:block ) => {
             let x_upper = usize::min($spot.x + 1, width-1);
             let x_lower = isize::max($spot.x as isize - 1, 0) as usize;
             let y_upper = usize::min($spot.y + 1, height-1);
@@ -88,8 +95,8 @@ fn generate_image(width: usize, height: usize, input: &Vec<Vec<Color>>, starting
                         continue;
                     }
 
-                    x = xx;
-                    y = yy;
+                    $x = xx;
+                    $y = yy;
 
                     $fn
                 }
@@ -103,9 +110,11 @@ fn generate_image(width: usize, height: usize, input: &Vec<Vec<Color>>, starting
         let rand_x = rng.gen_range(0 .. width);
         let rand_y = rng.gen_range(0 .. height);
         let color = input[rand_y][rand_x];
-        let best_spot_index = spots.iter().enumerate().min_by_key(|(i, spot)| {
+        let best_spot_index = spots.par_iter().enumerate().min_by_key(|(i, spot)| {
+            let mut x;
+            let mut y;
             let mut total_distance = 0;
-            neighbors!(spot, {
+            neighbors!(spot, x, y, {
                 if cell_state[y][x] == CellState::Filled {
                     total_distance += pixels[y][x].dist(&color);
                 }
@@ -115,7 +124,7 @@ fn generate_image(width: usize, height: usize, input: &Vec<Vec<Color>>, starting
         let best_spot = spots.remove(best_spot_index);
         pixels[best_spot.y][best_spot.x] = color;
         cell_state[best_spot.y][best_spot.x] = CellState::Filled;
-        neighbors!(best_spot, {
+        neighbors!(best_spot, x, y, {
             if cell_state[y][x] == CellState::Empty {
                 cell_state[y][x] = CellState::Fringe;
                 spots.push(Point { x, y });
@@ -123,7 +132,7 @@ fn generate_image(width: usize, height: usize, input: &Vec<Vec<Color>>, starting
         });
         
         placed += 1;
-        print!("\r{:06}/{:06}", placed, width * height);
+        print!("\r{:7}/{:7} ({:3.2}%)", placed, width * height, (placed as f32) / ((width * height) as f32) * 100.);
     }
     println!();
 
