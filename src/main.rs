@@ -5,21 +5,33 @@ use std::collections::BTreeSet;
 use image::io::Reader as ImageReader;
 
 fn main() {
-    let width = 200;
-    let height = 200;
+    let width = 64;
+    let height = 64;
     let mut rng = rand::thread_rng();
     let mut input = vec![vec![Color { r: 0, g: 0, b: 0 }; width]; height];
     let input_image = ImageReader::open("./monet.jpg").unwrap().decode().unwrap();
+    let image_offset_x = rng.gen_range(0 .. (input_image.width() as usize - width));
+    let image_offset_y = rng.gen_range(0 .. (input_image.height() as usize - height));
     let input_image_rgb = input_image.as_rgb8().unwrap();
-    for x in 0 .. width {
-        for y in 0 .. height {
+    for x in image_offset_x .. image_offset_x + width {
+        for y in image_offset_y .. image_offset_y + height {
             let rgb = input_image_rgb.get_pixel(x as u32, y as u32).0;
-            //input[y][x] = Color { r: rng.gen_range(0 .. 255), g: rng.gen_range(0 .. 255), b: rng.gen_range(0 .. 255) };
-            input[y][x] = Color { r: rgb[0] as usize, g: rgb[1] as usize, b: rgb[2] as usize };
+            input[y - image_offset_y][x - image_offset_x] = Color { r: rgb[0] as usize, g: rgb[1] as usize, b: rgb[2] as usize };
         }
     }
+    
+    let mut starting_configurations = vec![
+        vec![Point { x: width / 2, y: height / 2 }],
+        vec![Point { x: 0, y: 0 }],
+        vec![Point { x: width-1, y: height-1 }],
+        vec![Point { x: width / 4, y: height / 4 }, Point { x: 3 * width / 4, y: height / 4 }, Point { x: width / 4, y: 3 * height / 4 }, Point { x: 3 * width / 4, y: 3 * height / 4 }],
+        vec![Point { x: width / 4, y: height / 4 }, Point { x: width / 2, y: height / 2 }, Point { x: 3 * width / 4, y: 3 * height / 4 }],
+    ];
+    let chosen_starting_configuration = starting_configurations.remove(rng.gen_range(0 .. starting_configurations.len()));
+    println!("Seed: {:?}", chosen_starting_configuration);
+    
     let start = Instant::now();
-    let generated = generate_image(width, height, &input);
+    let generated = generate_image(width, height, &input, chosen_starting_configuration);
     println!("{}ms", start.elapsed().as_millis());
     let mut img = RgbImage::new(width as u32, height as u32);
     for x in 0 .. width {
@@ -57,11 +69,10 @@ impl Color {
     }
 }
 
-fn generate_image(width: usize, height: usize, input: &Vec<Vec<Color>>) -> Vec<Vec<Color>> {
+fn generate_image(width: usize, height: usize, input: &Vec<Vec<Color>>, starting_spots: Vec<Point>) -> Vec<Vec<Color>> {
     let mut pixels = vec![vec![Color { r: 0, g: 0, b: 0 }; width]; height];
     let mut cell_state = vec![vec![CellState::Empty; width]; height];
-    let mut avg_color =  vec![vec![Color { r: 0, g: 0, b: 0 }; width]; height];
-    let mut spots = vec![Point { x: width/2, y: height/2 }];
+    let mut spots = starting_spots; //vec![Point { x: width/2, y: height/2 }];
     let mut x = 0;
     let mut y = 0;
 
