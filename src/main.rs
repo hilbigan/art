@@ -7,6 +7,8 @@ use rayon::prelude::*;
 use std::env;
 use itertools::Itertools;
 
+const PUNISH_TOO_MANY_NEIGHBORS: usize = 10000;
+
 fn main() {
     let args = env::args().collect_vec();
     let width: usize = args[1].parse().expect("arg 1: usize width");
@@ -79,7 +81,7 @@ impl Color {
 fn generate_image(width: usize, height: usize, input: &Vec<Vec<Color>>, starting_spots: Vec<Point>) -> Vec<Vec<Color>> {
     let mut pixels = vec![vec![Color { r: 0, g: 0, b: 0 }; width]; height];
     let mut cell_state = vec![vec![CellState::Empty; width]; height];
-    let mut spots = starting_spots; //vec![Point { x: width/2, y: height/2 }];
+    let mut spots = starting_spots;
     let mut x;
     let mut y;
 
@@ -110,17 +112,34 @@ fn generate_image(width: usize, height: usize, input: &Vec<Vec<Color>>, starting
         let rand_x = rng.gen_range(0 .. width);
         let rand_y = rng.gen_range(0 .. height);
         let color = input[rand_y][rand_x];
-        let best_spot_index = spots.par_iter().enumerate().min_by_key(|(i, spot)| {
+        let best_spot_index = spots.par_iter().enumerate().fold(|| (0, 1 << 24), |(best_index, best_value), (index, spot)| {
             let mut x;
             let mut y;
-            let mut total_distance = 0;
+            let mut value = 0;
+            let mut created_neighbors = 0;
+        
             neighbors!(spot, x, y, {
                 if cell_state[y][x] == CellState::Filled {
-                    total_distance += pixels[y][x].dist(&color);
+                    value += pixels[y][x].dist(&color);
+        
+                    if value > best_value {
+                        // No need to go further
+                        break
+                    }
+                } else {
+                    created_neighbors += 1;
                 }
             });
-            total_distance
-        }).unwrap().0;
+            
+            value += created_neighbors * PUNISH_TOO_MANY_NEIGHBORS;
+        
+            if value < best_value {
+                (index, value)
+            } else {
+                (best_index, best_value)
+            }
+        }).min_by_key(|(index, value)| *value).unwrap().0;
+
         let best_spot = spots.remove(best_spot_index);
         pixels[best_spot.y][best_spot.x] = color;
         cell_state[best_spot.y][best_spot.x] = CellState::Filled;
