@@ -18,7 +18,13 @@
 Usage:
 
 ```
-cargo run --release <width> <height> <input-image>
+cargo run --release <width> <height> <input-image> [output-image]
+```
+
+Example:
+
+```
+cargo run --release 200 200 monet.jpg /tmp/out.png
 ```
 
 Inspired by https://codegolf.stackexchange.com/a/22326.

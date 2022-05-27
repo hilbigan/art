@@ -1,19 +1,19 @@
 use rand::prelude::*;
 use image::{RgbImage, Rgb};
 use std::time::Instant;
-use std::collections::BTreeSet;
 use image::io::Reader as ImageReader;
 use rayon::prelude::*;
 use std::env;
 use itertools::Itertools;
 
-const PUNISH_TOO_MANY_NEIGHBORS: usize = 10000;
+const PUNISH_TOO_MANY_NEIGHBORS: usize = 0;
 
 fn main() {
     let args = env::args().collect_vec();
     let width: usize = args[1].parse().expect("arg 1: usize width");
     let height: usize = args[2].parse().expect("arg 2: usize height");
     let input_path = args[3].clone();
+    let output_path = if args.len() > 4 { args[4].clone() } else { "out.png".into() };
     println!("{}x{} palette: {}", width, height, input_path);
     
     let mut rng = rand::thread_rng();
@@ -49,7 +49,7 @@ fn main() {
             img.put_pixel(x as u32, y as u32, Rgb([color.r as u8, color.g as u8, color.b as u8]));
         }
     }
-    img.save("./out.png");
+    img.save(output_path).expect("write image");
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -74,7 +74,7 @@ enum CellState {
 
 impl Color {
     fn dist(&self, other: &Color) -> usize {
-        (isize::pow((self.r as isize - other.r as isize), 2) + isize::pow((self.g as isize - other.g as isize), 2) + isize::pow((self.b as isize - other.b as isize), 2)) as usize
+        (isize::pow(self.r as isize - other.r as isize, 2) + isize::pow(self.g as isize - other.g as isize, 2) + isize::pow(self.b as isize - other.b as isize, 2)) as usize
     }
 }
 
@@ -138,7 +138,7 @@ fn generate_image(width: usize, height: usize, input: &Vec<Vec<Color>>, starting
             } else {
                 (best_index, best_value)
             }
-        }).min_by_key(|(index, value)| *value).unwrap().0;
+        }).min_by_key(|(_, value)| *value).unwrap().0;
 
         let best_spot = spots.remove(best_spot_index);
         pixels[best_spot.y][best_spot.x] = color;
